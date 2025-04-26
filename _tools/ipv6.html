@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Rede IPv6</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 600px;
+            margin: auto;
+            background-color: #f4f4f4;
+        }
+        .calculator {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"],
+        input[type="number"] {
+            width: calc(100% - 22px); /* Adjust for padding/border */
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 1.1em;
+            word-wrap: break-word; /* Para números muito grandes */
+            color: #495057;
+        }
+        #result.error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+
+<div class="calculator">
+    <h1>Calculadora de Rede IPv6</h1>
+
+    <div>
+        <label for="ipv6Network">Endereço de Rede IPv6 (Opcional para cálculo):</label>
+        <input type="text" id="ipv6Network" placeholder="Ex: 2001:db8:abcd::">
+    </div>
+
+    <div>
+        <label for="prefixLength">Comprimento do Prefixo (/):</label>
+        <input type="number" id="prefixLength" min="0" max="128" placeholder="Ex: 64">
+    </div>
+
+    <button onclick="calculateIPv6()">Calcular Número de IPs</button>
+
+    <div id="result"></div>
+</div>
+
+<script>
+    function calculateIPv6() {
+        const prefixInput = document.getElementById('prefixLength');
+        const resultDiv = document.getElementById('result');
+
+        resultDiv.textContent = ''; // Limpa resultado anterior
+        resultDiv.classList.remove('error'); // Remove classe de erro
+
+        const prefixLengthStr = prefixInput.value;
+
+        // --- Validação ---
+        if (prefixLengthStr === '') {
+            resultDiv.textContent = 'Erro: Por favor, insira o comprimento do prefixo.';
+            resultDiv.classList.add('error');
+            return;
+        }
+
+        const prefixLength = parseInt(prefixLengthStr, 10);
+
+        if (isNaN(prefixLength) || prefixLength < 0 || prefixLength > 128) {
+            resultDiv.textContent = 'Erro: O comprimento do prefixo deve ser um número entre 0 e 128.';
+            resultDiv.classList.add('error');
+            return;
+        }
+
+        // --- Cálculo ---
+        // Total de bits em IPv6 = 128
+        // Bits para hosts = Total de bits - Bits do prefixo (rede)
+        const hostBits = 128 - prefixLength;
+
+        // Número total de IPs = 2 elevado à potência do número de bits de host
+        // Usamos BigInt para lidar com números potencialmente enormes
+        try {
+            const totalIPs = 2n ** BigInt(hostBits); // 2n é a notação BigInt para 2
+
+            // Formata o número grande com separadores de milhar/etc.
+            const formattedTotalIPs = totalIPs.toLocaleString('pt-BR');
+
+            resultDiv.innerHTML = `
+                <strong>Prefixo:</strong> /${prefixLength}<br>
+                <strong>Bits de Host:</strong> ${hostBits}<br>
+                <strong>Número Total de Endereços IP:</strong> ${formattedTotalIPs}
+                <br><small>(2<sup>${hostBits}</sup>)</small>
+            `;
+
+        } catch (e) {
+            // Captura erros inesperados (embora BigInt deva lidar com isso)
+            resultDiv.textContent = 'Erro inesperado durante o cálculo.';
+            resultDiv.classList.add('error');
+            console.error("Erro no cálculo IPv6:", e);
+        }
+    }
+</script>
+
+</body>
+</html>
