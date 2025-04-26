@@ -20,10 +20,11 @@ author: Engenheiros de telecom
 ###############################################
 
 navbar-links:
-  About Me: "aboutme"
   Tools: 
     - Calculadora IPv6: "/tools/ipv6"
     - Dividir IPv6: "/tools/ipv6-sub"
+  Projetos: "/outros/github-repo"
+  About Me: "aboutme"
   #Resources:
   #  - Beautiful Jekyll: "https://beautifuljekyll.com"
   #  - Learn markdown: "https://www.markdowntutorial.com/"

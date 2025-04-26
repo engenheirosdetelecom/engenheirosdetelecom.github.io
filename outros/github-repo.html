@@ -1,0 +1,196 @@
+---
+layout: base
+---
+
+{% include header.html type="page" %}
+
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repositórios de jorgeluiztaioque</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            line-height: 1.6;
+            padding: 20px;
+            margin: auto;
+            background-color: #f6f8fa;
+            color: #24292e;
+        }
+        .container {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 6px;
+            max-width: 900px;
+            margin: auto;
+            border: 1px solid #e1e4e8;
+            box-shadow: 0 1px 5px rgba(27,31,35,0.07);
+        }
+        h1 {
+            text-align: center;
+            border-bottom: 1px solid #eaecef;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        h1 a {
+            color: inherit; /* Herda a cor do h1 */
+            text-decoration: none;
+        }
+         h1 a:hover {
+            text-decoration: underline;
+         }
+        #statusArea {
+            text-align: center;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 6px;
+            color: #586069;
+        }
+        #statusArea.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        #repoList {
+            list-style-type: none;
+            padding: 0;
+            margin: 20px 0 0 0; /* Adiciona margem superior */
+        }
+        #repoList li {
+            padding: 12px 0;
+            border-bottom: 1px solid #eaecef;
+            display: flex; /* Para alinhar melhor */
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap; /* Permite quebrar linha em telas pequenas */
+        }
+        #repoList li:last-child {
+            border-bottom: none;
+        }
+        #repoList .repo-link {
+            font-weight: 600;
+            color: #0366d6;
+            text-decoration: none;
+            font-size: 1.1em;
+            margin-right: 10px; /* Espaço entre nome e descrição/stats */
+        }
+        #repoList .repo-link:hover {
+            text-decoration: underline;
+        }
+         #repoList .repo-details {
+            color: #586069;
+            font-size: 0.9em;
+            flex-basis: 100%; /* Faz descrição/stats ocuparem nova linha se necessário */
+            margin-top: 5px;
+         }
+         #repoList .repo-details span { /* Para stats */
+            margin-right: 10px;
+         }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>
+        <a href="https://github.com/jorgeluiztaioque" target="_blank" rel="noopener noreferrer">
+            Repositórios Públicos de jorgeluiztaioque
+        </a>
+    </h1>
+
+    <div id="statusArea">Carregando repositórios...</div>
+    <ul id="repoList">
+        <!-- Repositórios serão listados aqui pelo JavaScript -->
+    </ul>
+</div>
+
+<script>
+    // Espera o DOM estar completamente carregado antes de executar o script
+    document.addEventListener('DOMContentLoaded', fetchUserRepos);
+
+    async function fetchUserRepos() {
+        const username = 'jorgeluiztaioque'; // Usuário fixo
+        const statusArea = document.getElementById('statusArea');
+        const repoListUl = document.getElementById('repoList');
+
+        // Limpa a lista (caso haja execução dupla acidental) e mostra status
+        repoListUl.innerHTML = '';
+        statusArea.textContent = 'Carregando repositórios...';
+        statusArea.classList.remove('error'); // Remove classe de erro, se houver
+
+        try {
+            // --- Chama a API do GitHub ---
+            // Usamos type=public, sort=updated e per_page=100 para pegar até 100 mais recentes
+            const apiUrl = `https://api.github.com/users/${username}/repos?type=public&sort=updated&per_page=100`;
+            const response = await fetch(apiUrl);
+
+            // --- Tratamento de Erros da API ---
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error(`Usuário "${username}" não encontrado.`);
+                } else if (response.status === 403) {
+                    throw new Error(`Erro 403: Limite de taxa da API do GitHub atingido ou acesso proibido.`);
+                } else {
+                    throw new Error(`Erro ao buscar dados do GitHub: ${response.status}`);
+                }
+            }
+
+            // --- Processa os Dados ---
+            const repos = await response.json();
+
+            if (repos.length === 0) {
+                statusArea.textContent = 'Nenhum repositório público encontrado.';
+            } else {
+                statusArea.style.display = 'none'; // Esconde o status se encontrar repositórios
+                displayRepos(repos, repoListUl);
+            }
+
+        } catch (error) {
+            // --- Tratamento Geral de Erros ---
+            console.error("Erro ao buscar repositórios:", error);
+            statusArea.textContent = `Erro: ${error.message}`;
+            statusArea.classList.add('error'); // Adiciona classe para estilização de erro
+        }
+    }
+
+    function displayRepos(repos, listElement) {
+        repos.forEach(repo => {
+            const listItem = document.createElement('li');
+
+            // Cria o Link com o nome do repositório
+            const link = document.createElement('a');
+            link.href = repo.html_url; // URL da página web do repositório
+            link.textContent = repo.name;
+            link.target = '_blank'; // Abrir em nova aba
+            link.rel = 'noopener noreferrer'; // Segurança
+            link.className = 'repo-link';
+
+            // Cria div para detalhes (descrição e stats)
+            const detailsDiv = document.createElement('div');
+            detailsDiv.className = 'repo-details';
+
+             // Adiciona Descrição (se existir)
+            if (repo.description) {
+                detailsDiv.textContent = repo.description; // Começa com a descrição
+            } else {
+                 detailsDiv.textContent = '(Sem descrição)'; // Placeholder
+            }
+
+            // Adiciona Stats (opcional, mas útil)
+            detailsDiv.innerHTML += `<br><span>★ ${repo.stargazers_count}</span>`; // Estrelas
+            if (repo.language) {
+                detailsDiv.innerHTML += `<span> | ${repo.language}</span>`; // Linguagem
+            }
+
+
+            listItem.appendChild(link);
+            listItem.appendChild(detailsDiv); // Adiciona os detalhes
+            listElement.appendChild(listItem); // Adiciona o item completo à lista
+        });
+    }
+</script>
+
+</body>
+</html>
