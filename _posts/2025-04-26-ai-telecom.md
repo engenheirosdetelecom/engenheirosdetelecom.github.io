@@ -1,3 +1,8 @@
+---
+layout: post
+title:  Nova Fronteira: Como a Inteligência Artificial está Revolucionando a Engenharia e Operação de Redes de Telecom
+---
+
 # A Nova Fronteira: Como a Inteligência Artificial está Revolucionando a Engenharia e Operação de Redes de Telecom
 
 **Publicado em:** [Data Atual - ex: 21 de Abril de 2025] | **Por:** [Seu Nome/EngenheirosDeTelecom]
