@@ -1,0 +1,379 @@
+---
+layout: base
+---
+
+{% include header.html type="page" %}
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Sub-redes IPv6</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+            margin: auto;
+            background-color: #f4f4f4;
+        }
+        .calculator {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            max-width: 800px;
+            margin: auto;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"],
+        input[type="number"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        .input-group input[type="text"] {
+             flex-grow: 1;
+        }
+         .input-group input[type="number"] {
+             width: 80px; /* Largura fixa para prefixo */
+             flex-grow: 0;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background-color: #28a745; /* Verde */
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #resultArea {
+            margin-top: 20px;
+        }
+        #errorResult, #subnetList {
+             margin-top: 15px;
+             padding: 15px;
+             border-radius: 4px;
+             font-size: 1em; /* Ajustado para melhor leitura em listas */
+        }
+        #errorResult {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            word-wrap: break-word;
+        }
+         #subnetList {
+            background-color: #e9ecef;
+            border: 1px solid #ced4da;
+            color: #495057;
+            max-height: 400px; /* Limita altura para muitas subredes */
+            overflow-y: auto; /* Adiciona scroll se necessário */
+         }
+        #subnetList ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+         #subnetList li {
+            padding: 8px 0;
+            border-bottom: 1px dashed #ccc;
+            font-family: monospace; /* Melhor para IPs */
+            font-size: 0.95em;
+         }
+         #subnetList li:last-child {
+            border-bottom: none;
+         }
+         #subnetList code {
+             font-weight: bold;
+             color: #0056b3;
+         }
+         #subnetList .ip-count {
+             font-size: 0.9em;
+             color: #555;
+         }
+         .summary {
+             font-weight: bold;
+             margin-bottom: 10px;
+             padding-bottom: 10px;
+             border-bottom: 1px solid #ccc;
+         }
+         /* Estilos para o loader */
+        .loader {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: none; /* Escondido por padrão */
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="calculator">
+    <h1>Calculadora de Sub-redes IPv6</h1>
+
+    <div>
+        <label for="originalNetwork">Rede IPv6 Original:</label>
+        <div class="input-group">
+            <input type="text" id="originalNetwork" placeholder="Ex: 2001:db8:abcd::">
+            <input type="number" id="originalPrefix" min="0" max="128" placeholder="/ Ex: 48">
+        </div>
+    </div>
+
+    <div>
+        <label for="newPrefix">Novo Prefixo para Sub-redes:</label>
+        <input type="number" id="newPrefix" min="0" max="128" placeholder="/ Ex: 64">
+    </div>
+
+    <button onclick="calculateSubnets()">Calcular Sub-redes</button>
+
+    <div id="resultArea">
+        <div id="errorResult" style="display: none;"></div>
+        <div class="loader" id="loader"></div>
+        <div id="subnetList" style="display: none;">
+             <h2>Sub-redes Geradas</h2>
+             <div class="summary" id="summaryText"></div>
+             <ul id="subnetListItems">
+                 <!-- Itens serão adicionados aqui -->
+             </ul>
+         </div>
+    </div>
+</div>
+
+<script>
+    // --- Funções Auxiliares para IPv6 e BigInt ---
+
+    // Converte string IPv6 para BigInt
+    function ipv6ToBigInt(ipv6) {
+        // 1. Expande a forma compactada (::)
+        let expanded = ipv6;
+        if (expanded.includes('::')) {
+            const parts = expanded.split('::');
+            let hextetsBefore = parts[0] ? parts[0].split(':').filter(h => h !== '') : [];
+            let hextetsAfter = parts[1] ? parts[1].split(':').filter(h => h !== '') : [];
+            let missingHextets = 8 - (hextetsBefore.length + hextetsAfter.length);
+            let zeros = Array(missingHextets).fill('0000');
+            expanded = [...hextetsBefore, ...zeros, ...hextetsAfter].join(':');
+        }
+
+        // 2. Garante 8 hextets, preenchendo com zeros à esquerda se necessário
+        const hextets = expanded.split(':');
+        if (hextets.length < 8) {
+             // Se ainda faltar após expansão (ex: ::1), preenche início
+             while (hextets.length < 8) hextets.unshift('0000');
+        }
+
+
+        // 3. Converte cada hextet para BigInt e combina
+        let result = 0n;
+        for (const hextet of hextets) {
+            result = (result << 16n) | BigInt(`0x${hextet || '0'}`); // Adiciona || '0' para hextets vazios (raro após expansão)
+        }
+        return result;
+    }
+
+    // Converte BigInt para string IPv6 (com compressão básica)
+    function bigIntToIPv6(bigIntValue) {
+        const hextets = [];
+        for (let i = 0; i < 8; i++) {
+            // Extrai 16 bits de cada vez (da direita para esquerda no BigInt)
+            const hextetValue = (bigIntValue >> BigInt(16 * (7 - i))) & 0xFFFFn;
+            hextets.push(hextetValue.toString(16).padStart(4, '0'));
+        }
+        let ipv6String = hextets.join(':');
+
+        // Compressão simples: encontra a maior sequência de ':0000:' e substitui por '::'
+        let bestStartIndex = -1;
+        let bestLength = 0;
+        let currentStartIndex = -1;
+        let currentLength = 0;
+
+        for (let i = 0; i < hextets.length; i++) {
+            if (hextets[i] === '0000') {
+                if (currentStartIndex === -1) currentStartIndex = i;
+                currentLength++;
+            } else {
+                if (currentLength > bestLength) {
+                    bestStartIndex = currentStartIndex;
+                    bestLength = currentLength;
+                }
+                currentStartIndex = -1;
+                currentLength = 0;
+            }
+        }
+         // Verifica se a última sequência foi a maior
+        if (currentLength > bestLength) {
+            bestStartIndex = currentStartIndex;
+            bestLength = currentLength;
+        }
+
+        // Aplica compressão se houver uma sequência de pelo menos dois '0000'
+        if (bestLength >= 2) {
+            const parts = ipv6String.split(':');
+            const before = parts.slice(0, bestStartIndex).join(':');
+            const after = parts.slice(bestStartIndex + bestLength).join(':');
+            // Constrói a string comprimida
+            if (bestStartIndex === 0 && bestStartIndex + bestLength === 8) ipv6String = '::'; // Tudo zero
+            else if (bestStartIndex === 0) ipv6String = `::${after}`; // Zeros no início
+            else if (bestStartIndex + bestLength === 8) ipv6String = `${before}::`; // Zeros no fim
+            else ipv6String = `${before}::${after}`; // Zeros no meio
+        }
+
+        return ipv6String;
+    }
+
+    // Função principal de cálculo
+    async function calculateSubnets() {
+        const originalNetworkInput = document.getElementById('originalNetwork');
+        const originalPrefixInput = document.getElementById('originalPrefix');
+        const newPrefixInput = document.getElementById('newPrefix');
+        const errorDiv = document.getElementById('errorResult');
+        const subnetListDiv = document.getElementById('subnetList');
+        const subnetListItems = document.getElementById('subnetListItems');
+        const summaryText = document.getElementById('summaryText');
+        const loader = document.getElementById('loader');
+
+        // Limpa resultados e erros anteriores
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+        subnetListDiv.style.display = 'none';
+        subnetListItems.innerHTML = ''; // Limpa a lista
+        summaryText.textContent = '';
+        loader.style.display = 'block'; // Mostra o loader
+
+        // --- Validação ---
+        const originalNetworkStr = originalNetworkInput.value.trim();
+        const originalPrefixStr = originalPrefixInput.value;
+        const newPrefixStr = newPrefixInput.value;
+
+        if (!originalNetworkStr || !originalPrefixStr || !newPrefixStr) {
+             showError("Por favor, preencha todos os campos.");
+            return;
+        }
+
+        const originalPrefix = parseInt(originalPrefixStr, 10);
+        const newPrefix = parseInt(newPrefixStr, 10);
+
+        if (isNaN(originalPrefix) || originalPrefix < 0 || originalPrefix > 128 ||
+            isNaN(newPrefix) || newPrefix < 0 || newPrefix > 128) {
+            showError("Os prefixos devem ser números entre 0 e 128.");
+            return;
+        }
+
+        if (newPrefix <= originalPrefix) {
+            showError("O novo prefixo deve ser maior que o prefixo original para criar sub-redes.");
+            return;
+        }
+
+        let baseNetworkBigInt;
+        try {
+            baseNetworkBigInt = ipv6ToBigInt(originalNetworkStr);
+        } catch (e) {
+            showError("Endereço IPv6 original inválido. Verifique o formato.");
+            console.error("Erro ao converter IPv6:", e);
+            return;
+        }
+
+        // --- Cálculos ---
+        // Calcula o endereço de rede real aplicando a máscara original
+        const originalMask = (0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn << BigInt(128 - originalPrefix)) & 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
+        const actualNetworkBigInt = baseNetworkBigInt & originalMask;
+
+        const subnetBits = newPrefix - originalPrefix;
+        const numSubnets = 2n ** BigInt(subnetBits);
+
+        const ipsPerSubnet = 2n ** BigInt(128 - newPrefix);
+        const formattedIpsPerSubnet = ipsPerSubnet.toLocaleString('pt-BR');
+
+        // Atualiza o sumário
+        summaryText.innerHTML = `Rede Original: <code>${bigIntToIPv6(actualNetworkBigInt)}/${originalPrefix}</code><br>` +
+                                `Novo Prefixo: <code>/${newPrefix}</code><br>` +
+                                `Número de Sub-redes Geradas: <code>${numSubnets.toLocaleString('pt-BR')}</code><br>` +
+                                `IPs por Sub-rede: <code>${formattedIpsPerSubnet}</code> (2<sup>${128 - newPrefix}</sup>)`;
+
+        subnetListDiv.style.display = 'block';
+
+        // --- Geração da Lista de Sub-redes (em lotes para não travar) ---
+        const batchSize = 1000; // Processa em lotes de 1000
+        let currentSubnetIndex = 0n;
+
+        async function processBatch() {
+             const fragment = document.createDocumentFragment();
+             const limit = currentSubnetIndex + BigInt(batchSize);
+
+             for (let i = currentSubnetIndex; i < limit && i < numSubnets; i++) {
+                 // Calcula o offset para esta sub-rede
+                 // O 'i' representa o identificador da sub-rede nos bits de subnet
+                 const subnetOffset = i << BigInt(128 - newPrefix);
+                 const currentSubnetBigInt = actualNetworkBigInt | subnetOffset;
+                 const currentSubnetStr = bigIntToIPv6(currentSubnetBigInt);
+
+                 const li = document.createElement('li');
+                 li.innerHTML = `<code>${currentSubnetStr}/${newPrefix}</code> <span class="ip-count">(${formattedIpsPerSubnet} IPs)</span>`;
+                 fragment.appendChild(li);
+             }
+             subnetListItems.appendChild(fragment);
+             currentSubnetIndex = limit;
+
+             if (currentSubnetIndex < numSubnets) {
+                 // Continua no próximo ciclo de evento para não bloquear a UI
+                 setTimeout(processBatch, 0);
+             } else {
+                 loader.style.display = 'none'; // Esconde o loader ao terminar
+             }
+         }
+
+         // Inicia o processamento em lote
+         await processBatch(); // Use await se quiser garantir que termine antes de esconder o loader (embora setTimeout já faça isso)
+
+
+    }
+
+    function showError(message) {
+        const errorDiv = document.getElementById('errorResult');
+        const subnetListDiv = document.getElementById('subnetList');
+        const loader = document.getElementById('loader');
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        subnetListDiv.style.display = 'none'; // Esconde a lista se houver erro
+        loader.style.display = 'none'; // Esconde o loader
+    }
+
+</script>
+
+</body>
+</html>
