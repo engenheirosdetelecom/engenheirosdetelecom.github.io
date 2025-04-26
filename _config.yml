@@ -22,7 +22,7 @@ author: Engenheiros de telecom
 navbar-links:
   About Me: "aboutme"
   Tools: 
-   - Calculadora IPv6: "/tools/ipv6.html"
+  Calculadora IPv6: "/tools/ipv6.html"
   #Resources:
   #  - Beautiful Jekyll: "https://beautifuljekyll.com"
   #  - Learn markdown: "https://www.markdowntutorial.com/"
