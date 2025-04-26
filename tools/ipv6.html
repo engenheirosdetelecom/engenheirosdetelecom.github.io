@@ -10,41 +10,48 @@ layout: base
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculadora de Rede IPv6</title>
+    <title>Calculadora de Rede IPv6 Completa</title>
     <style>
         body {
             font-family: sans-serif;
             line-height: 1.6;
             padding: 20px;
+            
             margin: auto;
-            background-color: #f4f4f4;
+            background-color: #f8f9fa;
         }
         .calculator {
-            background-color: #fff;
-            padding: 25px;
+            background-color: #ffffff;
+            padding: 20px;
             border-radius: 8px;
-            max-width: 600px;
-            margin: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            max-width: 700px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
         h1 {
             text-align: center;
-            color: #333;
+            color: #343a40;
+            margin-bottom: 25px;
         }
         label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
             font-weight: bold;
-            color: #555;
+            color: #495057;
         }
         input[type="text"],
         input[type="number"] {
-            width: calc(100% - 22px); /* Adjust for padding/border */
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 1px solid #ccc;
+            width: calc(100% - 24px); /* Adjust for padding/border */
+            padding: 10px 12px;
+            margin-bottom: 18px;
+            border: 1px solid #ced4da;
             border-radius: 4px;
             font-size: 1em;
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+         input:focus {
+            border-color: #80bdff;
+            outline: 0;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
         }
         button {
             display: block;
@@ -57,95 +64,228 @@ layout: base
             font-size: 1.1em;
             cursor: pointer;
             transition: background-color 0.3s ease;
+            margin-top: 10px;
         }
         button:hover {
             background-color: #0056b3;
         }
         #result {
-            margin-top: 20px;
-            padding: 15px;
+            margin-top: 25px;
+            padding: 15px 20px;
             background-color: #e9ecef;
             border: 1px solid #ced4da;
             border-radius: 4px;
-            font-size: 1.1em;
-            word-wrap: break-word; /* Para números muito grandes */
+            font-size: 1.05em;
+            word-wrap: break-word;
             color: #495057;
+            line-height: 1.8;
         }
+         #result strong {
+            color: #0056b3; /* Darker blue for emphasis */
+         }
         #result.error {
             background-color: #f8d7da;
             border-color: #f5c6cb;
             color: #721c24;
         }
+         .error-message {
+             color: #dc3545;
+             font-size: 0.9em;
+             margin-top: -10px;
+             margin-bottom: 10px;
+         }
     </style>
 </head>
 <body>
 
 <div class="calculator">
-    <h1>Calculadora de Rede IPv6</h1>
+    <h1>Calculadora de Rede IPv6 Completa</h1>
 
     <div>
-        <label for="ipv6Network">Endereço de Rede IPv6 (Opcional para cálculo):</label>
-        <input type="text" id="ipv6Network" placeholder="Ex: 2001:db8:abcd::">
+        <label for="ipv6Address">Endereço IPv6 (Base da Rede):</label>
+        <input type="text" id="ipv6Address" placeholder="Ex: 2001:db8:abcd:1234:: ou 2001:db8::1">
+        <div id="ipv6Error" class="error-message"></div>
     </div>
 
     <div>
         <label for="prefixLength">Comprimento do Prefixo (/):</label>
         <input type="number" id="prefixLength" min="0" max="128" placeholder="Ex: 64">
+        <div id="prefixError" class="error-message"></div>
     </div>
 
-    <button onclick="calculateIPv6()">Calcular Número de IPs</button>
+    <button onclick="calculateIPv6()">Calcular Rede</button>
 
     <div id="result"></div>
 </div>
 
 <script>
+
+    // --- Funções Auxiliares para IPv6 ---
+
+    /**
+     * Converte uma string IPv6 (com ou sem '::') para um BigInt de 128 bits.
+     * Lança um erro se a string for inválida.
+     */
+    function parseIPv6(ipString) {
+        if (!ipString || typeof ipString !== 'string') {
+            throw new Error("Endereço IPv6 inválido: string vazia ou não é string.");
+        }
+
+        // 1. Lidando com a compressão '::'
+        let expandedIp = ipString;
+        const doubleColonIndex = ipString.indexOf('::');
+
+        if (doubleColonIndex !== -1) {
+            const partsBefore = ipString.substring(0, doubleColonIndex).split(':').filter(p => p.length > 0);
+            const partsAfter = ipString.substring(doubleColonIndex + 2).split(':').filter(p => p.length > 0);
+            const partsMissing = 8 - (partsBefore.length + partsAfter.length);
+
+            if (partsMissing < 0) throw new Error("Endereço IPv6 inválido: '::' incorreto ou muitos grupos.");
+
+            const zeros = Array(partsMissing).fill('0');
+            expandedIp = [...partsBefore, ...zeros, ...partsAfter].join(':');
+             // Caso especial: se o IP for apenas '::'
+             if (expandedIp === '') expandedIp = Array(8).fill('0').join(':');
+             // Caso especial: se começa com '::' Ex: ::1 -> 0:0:0:0:0:0:0:1
+             if (ipString.startsWith('::')) expandedIp = Array(partsMissing).fill('0').join(':') + ':' + partsAfter.join(':');
+             // Caso especial: se termina com '::' Ex: 2001:: -> 2001:0:0:0:0:0:0:0
+             if (ipString.endsWith('::')) expandedIp = partsBefore.join(':') + ':' + Array(partsMissing).fill('0').join(':');
+
+        } else if (ipString.split(':').length !== 8) {
+             throw new Error("Endereço IPv6 inválido: deve ter 8 grupos ou usar '::'.");
+        }
+
+
+        // 2. Convertendo grupos hex para BigInt
+        const parts = expandedIp.split(':');
+         if (parts.length !== 8) { // Double check after expansion
+             throw new Error(`Endereço IPv6 inválido após expansão: ${expandedIp} (Grupos: ${parts.length})`);
+         }
+
+        let ipBigInt = 0n; // Inicia como BigInt zero
+        for (let i = 0; i < 8; i++) {
+            const part = parts[i];
+            if (!/^[0-9a-fA-F]{1,4}$/.test(part)) { // Valida cada grupo hex
+                throw new Error(`Endereço IPv6 inválido: grupo '${part}' não é hexadecimal válido.`);
+            }
+            const value = BigInt(`0x${part || '0'}`); // Converte hex para BigInt
+            ipBigInt = (ipBigInt << 16n) | value; // Desloca 16 bits e adiciona o novo valor
+        }
+
+        return ipBigInt;
+    }
+
+    /**
+     * Formata um BigInt de 128 bits para uma string IPv6 completa (sem compressão '::').
+     */
+    function formatIPv6(ipBigInt) {
+        if (typeof ipBigInt !== 'bigint') return "Formato inválido";
+
+        const parts = [];
+        const mask16 = (1n << 16n) - 1n; // Máscara para pegar 16 bits (0xFFFFn)
+
+        for (let i = 0; i < 8; i++) {
+            // Pega os 16 bits mais baixos e converte para hex
+            const part = (ipBigInt & mask16).toString(16);
+            // Adiciona zeros à esquerda se necessário (mas toString(16) geralmente faz isso)
+            parts.push(part.padStart(4, '0'));
+            // Desloca para a direita para processar os próximos 16 bits
+            ipBigInt >>= 16n;
+        }
+
+        // Inverte a ordem porque pegamos do menos significativo para o mais significativo
+        return parts.reverse().join(':');
+    }
+
+
+    // --- Função Principal da Calculadora ---
+
     function calculateIPv6() {
+        const ipInput = document.getElementById('ipv6Address');
         const prefixInput = document.getElementById('prefixLength');
         const resultDiv = document.getElementById('result');
+        const ipErrorDiv = document.getElementById('ipv6Error');
+        const prefixErrorDiv = document.getElementById('prefixError');
 
-        resultDiv.textContent = ''; // Limpa resultado anterior
-        resultDiv.classList.remove('error'); // Remove classe de erro
+        // Limpa resultados e erros anteriores
+        resultDiv.textContent = '';
+        resultDiv.classList.remove('error');
+        ipErrorDiv.textContent = '';
+        prefixErrorDiv.textContent = '';
 
+        const ipString = ipInput.value.trim();
         const prefixLengthStr = prefixInput.value;
 
-        // --- Validação ---
+        let hasError = false;
+
+        // --- Validação do Prefixo ---
         if (prefixLengthStr === '') {
-            resultDiv.textContent = 'Erro: Por favor, insira o comprimento do prefixo.';
-            resultDiv.classList.add('error');
-            return;
+            prefixErrorDiv.textContent = 'Por favor, insira o comprimento do prefixo.';
+            hasError = true;
         }
-
         const prefixLength = parseInt(prefixLengthStr, 10);
+        if (!hasError && (isNaN(prefixLength) || prefixLength < 0 || prefixLength > 128)) {
+            prefixErrorDiv.textContent = 'Prefixo deve ser um número entre 0 e 128.';
+            hasError = true;
+        }
 
-        if (isNaN(prefixLength) || prefixLength < 0 || prefixLength > 128) {
-            resultDiv.textContent = 'Erro: O comprimento do prefixo deve ser um número entre 0 e 128.';
+        // --- Validação e Parsing do IP ---
+        let ipv6BigInt;
+        if (ipString === '') {
+             ipErrorDiv.textContent = 'Por favor, insira um endereço IPv6 base.';
+             hasError = true;
+        } else {
+            try {
+                ipv6BigInt = parseIPv6(ipString);
+            } catch (e) {
+                ipErrorDiv.textContent = `Erro no endereço IPv6: ${e.message}`;
+                hasError = true;
+            }
+        }
+
+        // Se houve algum erro, para aqui
+        if (hasError) {
+            resultDiv.textContent = 'Corrija os erros acima para calcular.';
             resultDiv.classList.add('error');
             return;
         }
 
-        // --- Cálculo ---
-        // Total de bits em IPv6 = 128
-        // Bits para hosts = Total de bits - Bits do prefixo (rede)
-        const hostBits = 128 - prefixLength;
-
-        // Número total de IPs = 2 elevado à potência do número de bits de host
-        // Usamos BigInt para lidar com números potencialmente enormes
+        // --- Cálculos com BigInt ---
         try {
-            const totalIPs = 2n ** BigInt(hostBits); // 2n é a notação BigInt para 2
+            const hostBits = 128 - prefixLength;
 
-            // Formata o número grande com separadores de milhar/etc.
+            // Calcular a máscara de rede
+            // Cria um BigInt com 128 bits '1' e desloca para a direita para zerar os bits de host
+            // Ex: /64 -> 64 '1's seguidos de 64 '0's
+            const networkMask = prefixLength === 0 ? 0n : (~0n << BigInt(128 - prefixLength)); // ~0n cria um BigInt com infinitos '1's
+
+            // Calcular o endereço de rede (primeiro IP)
+            const networkAddressBigInt = ipv6BigInt & networkMask;
+
+            // Calcular a máscara de host (inversa da máscara de rede)
+            // Ex: /64 -> 64 '0's seguidos de 64 '1's
+            const hostMask = prefixLength === 128 ? 0n : (1n << BigInt(128 - prefixLength)) - 1n;
+
+            // Calcular o último endereço IP
+            // Pegar o endereço de rede e colocar '1' em todos os bits de host
+            const lastAddressBigInt = networkAddressBigInt | hostMask;
+
+            // Calcular o número total de IPs
+            const totalIPs = 2n ** BigInt(hostBits);
             const formattedTotalIPs = totalIPs.toLocaleString('pt-BR');
 
+            // --- Exibir Resultados ---
             resultDiv.innerHTML = `
-                <strong>Prefixo:</strong> /${prefixLength}<br>
+                <strong>Rede Base:</strong> ${ipString}/${prefixLength}<br>
+                <strong>Endereço de Rede (Primeiro IP):</strong> ${formatIPv6(networkAddressBigInt)}<br>
+                <strong>Último Endereço IP:</strong> ${formatIPv6(lastAddressBigInt)}<br>
                 <strong>Bits de Host:</strong> ${hostBits}<br>
-                <strong>Número Total de Endereços IP:</strong> ${formattedTotalIPs}
-                <br><small>(2<sup>${hostBits}</sup>)</small>
+                <strong>Total de Endereços IP:</strong> ${formattedTotalIPs} <small>(2<sup>${hostBits}</sup>)</small>
             `;
 
         } catch (e) {
-            // Captura erros inesperados (embora BigInt deva lidar com isso)
-            resultDiv.textContent = 'Erro inesperado durante o cálculo.';
+            // Captura erros inesperados durante o cálculo
+            resultDiv.textContent = `Erro inesperado durante o cálculo: ${e.message}`;
             resultDiv.classList.add('error');
             console.error("Erro no cálculo IPv6:", e);
         }
